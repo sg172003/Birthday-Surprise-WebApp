@@ -11,54 +11,186 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [showHappyBirthday, setShowHappyBirthday] = useState(false);
   const [showAfterEffect, setShowAfterEffect] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const timerRefs = useRef<{
+    instructionTimer?: NodeJS.Timeout;
+    afterEffectTimer?: NodeJS.Timeout;
+    completeTimer?: NodeJS.Timeout;
+  }>({});
 
   useEffect(() => {
-    const audio = new Audio('/happy-birthday-theme.mp3');
+    const audio = new Audio();
+    audio.preload = 'auto';
     audio.loop = true;
     audio.volume = 0.7;
     audioRef.current = audio;
 
+    // Add comprehensive error handling for audio loading
+    const handleAudioError = (e: Event) => {
+      console.error('Audio failed to load:', e);
+      console.error('Audio error details:', {
+        networkState: audio.networkState,
+        readyState: audio.readyState,
+        error: audio.error
+      });
+    };
+
+    const handleAudioLoaded = () => {
+      console.log('Audio loaded successfully:', {
+        duration: audio.duration,
+        networkState: audio.networkState,
+        readyState: audio.readyState
+      });
+    };
+
+    const handleLoadStart = () => {
+      console.log('Audio loading started...');
+    };
+
+    const handleProgress = () => {
+      console.log('Audio loading progress...');
+    };
+
+    audio.addEventListener('error', handleAudioError);
+    audio.addEventListener('canplaythrough', handleAudioLoaded);
+    audio.addEventListener('loadstart', handleLoadStart);
+    audio.addEventListener('progress', handleProgress);
+
+    // Test if the browser supports the audio format
+    const canPlayMP3 = audio.canPlayType('audio/mpeg');
+    console.log('Browser MP3 support:', canPlayMP3);
+
+    // Simplified audio setup - just try local file first
+    audio.src = '/happy-birthday-theme.mp3';
+
+    // Force load the audio
+    audio.load();
+
     const tryPlay = async () => {
       try {
+        // Wait for audio to be ready
+        if (audio.readyState < 2) { // HAVE_CURRENT_DATA
+          await new Promise((resolve) => {
+            const checkReady = () => {
+              if (audio.readyState >= 2) {
+                resolve(true);
+              } else {
+                setTimeout(checkReady, 100);
+              }
+            };
+            checkReady();
+          });
+        }
+
         await audio.play();
         console.log('Background music started immediately.');
+        // Don't set audioReady automatically - wait for user interaction
       } catch (err) {
-        console.warn('Autoplay blocked, waiting for user interaction...');
+        // This is expected - browsers block autoplay for security
+        console.log('🎵 Audio autoplay blocked (normal browser behavior). Music will start on first user interaction.');
+        setAudioBlocked(true);
+
         const resumeAudio = async () => {
           try {
-            await audio.play();
-            console.log('Audio played after user interaction');
-            document.removeEventListener('pointerdown', resumeAudio);
+            if (audio.readyState >= 2) {
+              await audio.play();
+              console.log('🎵 Background music started after user interaction!');
+              setAudioBlocked(false);
+              setAudioReady(true);
+            } else {
+              console.log('🎵 Audio not ready yet, will try again...');
+              // Try again after a short delay
+              setTimeout(async () => {
+                try {
+                  await audio.play();
+                  console.log('🎵 Background music started successfully!');
+                  setAudioBlocked(false);
+                  setAudioReady(true);
+                } catch (retryErr) {
+                  console.log('🎵 Unable to play background music, continuing without audio.');
+                  setAudioBlocked(false);
+                  setAudioReady(true); // Continue without audio
+                }
+              }, 500);
+            }
           } catch (e) {
-            console.error('Still failed to play audio:', e);
+            console.log('🎵 Unable to play background music, continuing without audio.');
+            setAudioBlocked(false);
+            setAudioReady(true); // Continue without audio
           }
         };
-        document.addEventListener('pointerdown', resumeAudio, { once: true });
+
+        // Listen for any user interaction to start audio
+        const events = ['click', 'touchstart', 'keydown'];
+        events.forEach(event => {
+          document.addEventListener(event, resumeAudio, { once: true });
+        });
       }
     };
 
-    tryPlay();
+    // Wait a bit for the audio to start loading before trying to play
+    setTimeout(tryPlay, 500);
 
+    console.log('🎬 CelebrationScreen mounted - starting confetti');
     setShowConfetti(true);
-    const instructionTimer = setTimeout(() => setShowBlowInstruction(true), 2500);
-    const afterEffectTimer = setTimeout(() => {
-      setShowBlowInstruction(false);
-      setShowAfterEffect(true);
-    }, 12000);
-    const completeTimer = setTimeout(() => setShowHappyBirthday(true), 14000);
+
+    // Set video as loaded for testing
+    setTimeout(() => {
+      console.log('🎬 Setting video as loaded after 1s');
+      setVideoLoaded(true);
+    }, 1000);
+
+    // Don't start timers immediately - wait for audio to be ready
 
     return () => {
-      clearTimeout(instructionTimer);
-      clearTimeout(afterEffectTimer);
-      clearTimeout(completeTimer);
+      // Clear all timers
+      Object.values(timerRefs.current).forEach(timer => {
+        if (timer) clearTimeout(timer);
+      });
+
       if (audioRef.current) {
+        audioRef.current.removeEventListener('error', handleAudioError);
+        audioRef.current.removeEventListener('canplaythrough', handleAudioLoaded);
+        audioRef.current.removeEventListener('loadstart', handleLoadStart);
+        audioRef.current.removeEventListener('progress', handleProgress);
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
       }
-      document.removeEventListener('pointerdown', tryPlay);
     };
   }, []);
+
+  // Start video timeline when audio is ready
+  useEffect(() => {
+    if (audioReady) {
+      console.log('🎬 Audio is ready! Starting video timeline...');
+
+      // Clear any existing timers first
+      Object.values(timerRefs.current).forEach(timer => {
+        if (timer) clearTimeout(timer);
+      });
+
+      // Start the video timeline - show instruction much earlier
+      timerRefs.current.instructionTimer = setTimeout(() => {
+        console.log('🎬 Showing blow instruction');
+        setShowBlowInstruction(true);
+      }, 500); // Show instruction almost immediately after video starts
+
+      timerRefs.current.afterEffectTimer = setTimeout(() => {
+        console.log('🎬 Starting after effects (candles blowing out)');
+        setShowBlowInstruction(false);
+        setShowAfterEffect(true);
+      }, 14000); // Added +2s: 12s + 2s = 14s
+
+      timerRefs.current.completeTimer = setTimeout(() => {
+        console.log('🎬 Showing happy birthday');
+        setShowHappyBirthday(true);
+      }, 16000); // Added +2s: 14s + 2s = 16s
+    }
+  }, [audioReady]);
+
+  // No automatic fallback - video only starts with user interaction
 
   const handleContinue = () => {
     if (audioRef.current) {
@@ -68,11 +200,36 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
     onContinue?.();
   };
 
+  // Handle screen click to start video and audio
+  const handleScreenClick = async () => {
+    if (!audioReady) {
+      console.log('🎬 User clicked! Starting video and audio...');
+
+      // Try to start audio
+      if (audioRef.current) {
+        try {
+          if (audioRef.current.readyState >= 2) {
+            await audioRef.current.play();
+            console.log('🎵 Audio started successfully!');
+          } else {
+            console.log('🎵 Audio not ready, but continuing with video');
+          }
+        } catch (e) {
+          console.log('🎵 Audio failed, but continuing with video');
+        }
+      }
+
+      // Start video timeline regardless of audio success
+      setAudioBlocked(false);
+      setAudioReady(true);
+    }
+  };
+
   // Generate responsive confetti pieces that match our theme
   const confettiPieces = Array.from({ length: 40 }, (_, i) => {
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    
+
     return (
       <motion.div
         key={i}
@@ -100,16 +257,19 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
   });
 
   return (
-    <div className="fixed inset-0 overflow-hidden pb-20 sm:pb-24 md:pb-28"
-         style={{
-           background: 'linear-gradient(135deg, #ffeaa7 0%, #fab1a0 25%, #e17055 50%, #fd79a8 75%, #6c5ce7 100%)'
-         }}>
-         
+    <div
+      className="fixed inset-0 overflow-hidden pb-20 sm:pb-24 md:pb-28 cursor-pointer"
+      style={{
+        background: 'linear-gradient(135deg, #ffeaa7 0%, #fab1a0 25%, #e17055 50%, #fd79a8 75%, #6c5ce7 100%)'
+      }}
+      onClick={handleScreenClick}
+    >
+
       {/* Confetti explosion */}
       <div className="absolute inset-0 pointer-events-none z-30">
         {confettiPieces}
       </div>
-      
+
       {/* Video Container with Advanced Background Removal */}
       <div className="absolute inset-0 flex items-center justify-center px-4 sm:px-6 lg:px-8">
         <motion.div
@@ -131,7 +291,7 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
             type: "spring",
             stiffness: 100,
             damping: 10,
-            delay: 0.5
+            delay: 0.2
           }}
         >
           <video
@@ -180,9 +340,9 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
               type="video/mp4"
             />
           </video>
-          
+
           {/* Multiple overlay layers for seamless blending */}
-          
+
           {/* Color correction layer */}
           <div
             className="absolute inset-0 pointer-events-none rounded-full"
@@ -221,7 +381,38 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
           />
         </motion.div>
       </div>
-      
+
+      {/* User interaction prompt */}
+      <AnimatePresence>
+        {!audioReady && (
+          <motion.div
+            className="fixed inset-0 flex items-center justify-center z-50 bg-black/20 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <motion.div
+              className="bg-white/95 backdrop-blur-sm rounded-2xl px-8 py-6 shadow-2xl border-2 border-yellow-400 text-center max-w-md mx-4"
+              animate={{ scale: [1, 1.02, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <div className="text-6xl mb-4">🎬</div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                Ready for the Show?
+              </h2>
+              <p className="text-gray-600 mb-4">
+                Click anywhere to start the birthday celebration!
+              </p>
+              <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
+                <span>🎵 Music</span>
+                
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Custom "Blow out the candles" instruction overlay */}
       <AnimatePresence>
         {showBlowInstruction && !showHappyBirthday && videoLoaded && (
@@ -232,14 +423,14 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: "spring", stiffness: 200 }}
           >
-            <motion.div 
+            <motion.div
               className="bg-white/95 backdrop-blur-sm rounded-full px-4 sm:px-6 md:px-8 py-3 sm:py-4 shadow-2xl border-2 sm:border-4"
               style={{ borderColor: '#fdcb6e' }}
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 1.5, repeat: Infinity }}
             >
               <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 text-center">
-                Blow out the candles! 🕯️
+                Blow out the candles! 🎂
               </p>
               <p className="text-xs sm:text-sm text-gray-600 mt-1 text-center">
                 Watch the magic happen ✨
@@ -248,7 +439,7 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       {/* After Effect - Magical sparkle explosion when candles are blown out */}
       <AnimatePresence>
         {showAfterEffect && (
@@ -257,10 +448,10 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.8 }}
           >
             {/* Realistic sparkle explosion */}
-            {Array.from({ length: 25 }, (_, i) => (
+            {Array.from({ length: 50 }, (_, i) => (
               <motion.div
                 key={i}
                 className="absolute text-yellow-400 text-lg sm:text-xl md:text-2xl"
@@ -279,7 +470,7 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
                 transition={{
                   duration: 2.5,
                   ease: "easeOut",
-                  delay: i * 0.03
+                  delay: i * 1
                 }}
               >
                 ✨
@@ -331,8 +522,6 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
                 }}
               />
             </motion.div>
-
-
 
             {/* Text effect */}
             <motion.div
@@ -390,9 +579,9 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
                   animate={{ scale: 1 }}
                   transition={{ type: "spring", stiffness: 100, delay: 0.2 }}
                 >
-                  Happy Birthday! 🎉
+                  Happy Birthday! 
                 </motion.h1>
-                
+
                 <motion.button
                   onClick={handleContinue}
                   className="px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-white bg-gradient-to-r from-pink-500 to-purple-600 rounded-full shadow-2xl overflow-hidden group relative backdrop-blur-sm border-2 border-white/20 transform transition-all duration-200"
@@ -414,7 +603,7 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
                       ease: "linear"
                     }}
                   />
-                  
+
                   <span className="relative z-10">
                     Continue the Magic! ✨
                   </span>
@@ -424,7 +613,7 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       {/* Ambient floating sparkles around the edges */}
       <div className="absolute inset-0 pointer-events-none z-20">
         {Array.from({ length: 8 }, (_, i) => (
@@ -450,9 +639,9 @@ const CelebrationScreen = ({ onContinue }: CelebrationScreenProps) => {
           </motion.div>
         ))}
       </div>
-      
+
       {/* Subtle edge vignette for depth */}
-      <div 
+      <div
         className="absolute inset-0 pointer-events-none z-10"
         style={{
           background: `
