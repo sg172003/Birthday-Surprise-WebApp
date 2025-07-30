@@ -2,14 +2,14 @@ import { useState } from 'react';
 import './global.css';
 
 // Import all screen components
-import LoadingScreen from './components/screens/LoadingScreen';
-import CountdownScreen from './components/screens/CountdownScreen';
-import CelebrationScreen from './components/screens/CelebrationScreen';
-import HappyBirthdayScreen from './components/screens/HappyBirthdayScreen';
-import MessagesScreen from './components/screens/MessagesScreen';
-import MomentsScreen from './components/screens/MomentsScreen';
-import LetterScreen from './components/screens/LetterScreen';
-import FinalScreen from './components/screens/FinalScreen';
+import LoadingScreen from './client/components/screens/LoadingScreen';
+import CountdownScreen from './client/components/screens/CountdownScreen';
+import CelebrationScreen from './client/components/screens/CelebrationScreen';
+import HappyBirthdayScreen from './client/components/screens/HappyBirthdayScreen';
+import MessagesScreen from './client/components/screens/MessagesScreen';
+import MomentsScreen from './client/components/screens/MomentsScreen';
+import LetterScreen from './client/components/screens/LetterScreen';
+import FinalScreen from './client/components/screens/FinalScreen';
 
 // Customizable configuration
 export const APP_CONFIG = {
