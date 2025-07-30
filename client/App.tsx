@@ -17,7 +17,7 @@ export const APP_CONFIG = {
   birthdayPersonName: "Laddu Baccha💖",
   
   // Target birthday date (YYYY-MM-DD format)
-  targetDate: "2025-07-18", // Change this to the actual birthday date
+  targetDate: "2025-08-18", // Change this to the actual birthday date
   
   // Special messages for the MessagesScreen
   messages: [
