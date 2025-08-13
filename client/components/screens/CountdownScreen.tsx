@@ -19,7 +19,7 @@ const CountdownScreen = ({ targetDate, onComplete }: CountdownScreenProps) => {
 
   useEffect(() => {
     const calculateTimeLeft = () => {
-      const target = new Date(targetDate).getTime();
+      const target = new Date(`${targetDate}T00:00:00+05:30`).getTime();
       const now = new Date().getTime();
       const difference = target - now;
 
